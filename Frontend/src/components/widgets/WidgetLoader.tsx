@@ -29,9 +29,10 @@ const WidgetLoader: React.FC<WidgetLoaderProps> = ({
       setIsLoading(true);
       setError(null);
       try {
+        const token = typeof window !== "undefined" ? localStorage.getItem("nexus_token") : null;
         const response = await fetch(
           `${apiBaseUrl}/api/v1/dados/widgets/target/${encodeURIComponent(targetModule)}`,
-          { cache: "no-store" }
+          { cache: "no-store", headers: token ? { Authorization: `Bearer ${token}` } : undefined }
         );
         if (!response.ok) {
           throw new Error(`Erro ao carregar widgets (${response.status})`);

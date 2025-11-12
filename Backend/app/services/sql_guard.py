@@ -3,9 +3,11 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+import time
 from typing import Any, List
 
 from fastapi import HTTPException, status
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 COMMENT_PATTERN = re.compile(r"(--.*?$)|(/\*.*?\*/)", re.MULTILINE | re.DOTALL)
@@ -100,15 +102,27 @@ async def validar_e_executar_sql_seguro(
     _ensure_no_forbidden_keywords(normalized)
     _ensure_select_statement(normalized)
 
-    # TODO: hook into PostgreSQL once available. For now we simulate latency/results.
-    sample_rows: list[dict[str, Any]] = [
-        {"coluna_a": 1, "coluna_b": "Dado A"},
-        {"coluna_a": 2, "coluna_b": "Dado B"},
-    ]
+    if session is None:
+        # Defensive fallback
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Sessao de banco nao configurada.",
+        )
+
+    # Wrap the query to cap results to 100 rows
+    capped_query = f"SELECT * FROM ( {normalized.rstrip(';')} ) AS q LIMIT 100;"
+
+    start = time.perf_counter()
+    result = await session.execute(text(capped_query))
+    rows = result.mappings().all()
+    elapsed_ms = int((time.perf_counter() - start) * 1000)
+
+    # Convert to plain dicts
+    sample_rows = [dict(r) for r in rows]
 
     return SQLValidationResult(
         normalized_query=normalized,
         rows_affected=0,
         sample_rows=sample_rows,
-        execution_time_ms=35,
+        execution_time_ms=elapsed_ms,
     )

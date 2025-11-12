@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { API_BASE_URL } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import React, { useState } from "react";
 
@@ -47,7 +48,7 @@ const LoginPage: React.FC = () => {
     setErrorMessage(null);
 
     try {
-      const response = await fetch("/auth/check-email", {
+      const response = await fetch(`${API_BASE_URL}/auth/check-email`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
@@ -84,7 +85,7 @@ const LoginPage: React.FC = () => {
     setErrorMessage(null);
 
     try {
-      const response = await fetch("/auth/token", {
+      const response = await fetch(`${API_BASE_URL}/auth/token`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: tenantInfo.email, password }),
@@ -99,7 +100,7 @@ const LoginPage: React.FC = () => {
         localStorage.setItem("nexus_token", data.access_token);
         localStorage.setItem("nexus_user", JSON.stringify(data));
       }
-      router.push("/");
+      router.push("/dados/estudio-sql");
     } catch (error) {
       console.error(error);
       setErrorMessage("Senha incorreta. Tente novamente.");

@@ -1,4 +1,5 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
     CheckEmailRequest,
@@ -7,7 +8,12 @@ from app.models import (
     TokenRequest,
     TokenResponse,
 )
-from app.services import data_store
+from app.db.session import get_session
+from app.security.jwt_tenancy import (
+    create_access_token,
+    get_user_by_email,
+    verify_password,
+)
 
 router = APIRouter()
 
@@ -17,11 +23,19 @@ router = APIRouter()
     summary="Identify tenant and user based on email",
     response_model=CheckEmailResponse,
 )
-async def check_email(payload: CheckEmailRequest) -> CheckEmailResponse:
-    user = data_store.find_user_by_email(payload.email)
-    if not user:
+async def check_email(payload: CheckEmailRequest, session: AsyncSession = Depends(get_session)) -> CheckEmailResponse:
+    db_user = await get_user_by_email(session, payload.email)
+    if not db_user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario nao encontrado.")
-    return CheckEmailResponse(**user.to_check_email_payload())
+
+    # userName: fallback to email if no explicit name column
+    return CheckEmailResponse(
+        email=db_user["email"],
+        userName=db_user["email"],
+        tenantId=str(db_user["tenant_id"]),
+        tenantName=db_user.get("nome_empresa", ""),
+        tenantLogoUrl=None,
+    )
 
 
 @router.post(
@@ -29,19 +43,33 @@ async def check_email(payload: CheckEmailRequest) -> CheckEmailResponse:
     summary="Authenticate user and get session token",
     response_model=TokenResponse,
 )
-async def login_for_access_token(payload: TokenRequest) -> TokenResponse:
-    user = data_store.validate_credentials(payload.email, payload.password)
-    if not user:
+async def login_for_access_token(
+    payload: TokenRequest, session: AsyncSession = Depends(get_session)
+) -> TokenResponse:
+    db_user = await get_user_by_email(session, payload.email)
+    if not db_user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Credenciais invalidas.")
 
-    token = data_store.generate_token(user)
+    if not verify_password(payload.password, db_user["senha_hash"]):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Credenciais invalidas.")
+
+    roles = [db_user.get("perfil", "").lower()] if db_user.get("perfil") else []
+    token = create_access_token(
+        {
+            "sub": db_user["user_id"],
+            "user_id": db_user["user_id"],
+            "tenant_id": str(db_user["tenant_id"]),
+            "perfil": db_user.get("perfil"),
+            "roles": roles,
+        }
+    )
     return TokenResponse(
         access_token=token,
-        userName=user.name,
-        tenantId=user.tenant_id,
-        tenantName=user.tenant_name,
-        tenantLogoUrl=user.tenant_logo_url,
-        roles=user.roles,
+        userName=db_user.get("email", ""),
+        tenantId=str(db_user["tenant_id"]),
+        tenantName=db_user.get("nome_empresa", ""),
+        tenantLogoUrl=None,
+        roles=roles,
     )
 
 
@@ -49,4 +77,3 @@ async def login_for_access_token(payload: TokenRequest) -> TokenResponse:
 async def logout(payload: LogoutRequest) -> dict:
     data_store.invalidate_token(payload.token)
     return {"message": "Sessao finalizada com sucesso."}
-

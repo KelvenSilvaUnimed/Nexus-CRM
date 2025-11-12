@@ -88,7 +88,10 @@ const PermissionsModal = ({
       setErrorMessage(null);
 
       try {
-        const response = await fetch(`${API_BASE_URL}/api/v1/perfis-de-usuario`);
+        const token = typeof window !== "undefined" ? localStorage.getItem("nexus_token") : null;
+        const response = await fetch(`${API_BASE_URL}/api/v1/perfis-de-usuario`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        });
         if (!response.ok) {
           throw new Error(`Falha ao carregar perfis (${response.status})`);
         }

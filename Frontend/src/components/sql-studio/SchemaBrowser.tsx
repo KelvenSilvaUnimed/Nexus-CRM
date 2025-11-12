@@ -32,7 +32,10 @@ const SchemaBrowser: React.FC<SchemaBrowserProps> = ({
       setErrorMessage(null);
 
       try {
-        const response = await fetch(`${apiBaseUrl}/api/v1/dados/meta/schemas`);
+        const token = typeof window !== "undefined" ? localStorage.getItem("nexus_token") : null;
+        const response = await fetch(`${apiBaseUrl}/api/v1/dados/meta/schemas`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        });
         if (!response.ok) {
           throw new Error(`Erro ao carregar schemas (${response.status})`);
         }

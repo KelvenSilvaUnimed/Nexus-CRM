@@ -109,7 +109,10 @@ export default function MetadadosObjetosPage() {
     setErrorMessage(null);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/dados/meta-objetos`);
+      const token = typeof window !== "undefined" ? localStorage.getItem("nexus_token") : null;
+      const response = await fetch(`${API_BASE_URL}/api/v1/dados/meta-objetos`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
       if (!response.ok) {
         throw new Error(`Falha ao carregar objetos (${response.status})`);
       }
@@ -171,8 +174,10 @@ export default function MetadadosObjetosPage() {
     if (!deleteTarget) return;
     setIsDeleting(true);
     try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("nexus_token") : null;
       const response = await fetch(`${API_BASE_URL}/api/v1/dados/meta-objetos/${deleteTarget.metaId}`, {
         method: "DELETE",
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       });
       if (!response.ok) {
         throw new Error(`Falha ao excluir (${response.status})`);
@@ -193,11 +198,12 @@ export default function MetadadosObjetosPage() {
     const profileIds = profiles.map((profile) => profile.id);
 
     try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("nexus_token") : null;
       const response = await fetch(
         `${API_BASE_URL}/api/v1/dados/meta-objetos/${selectedObject.metaId}/permissoes`,
         {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({ profiles: profileIds }),
       });
 

@@ -103,9 +103,10 @@ export default function EstudioSQLPage() {
     setIsTestSuccessful(false);
 
     try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("nexus_token") : null;
       const response = await fetch(`${API_BASE_URL}/api/v1/dados/query/test`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({ query: sqlQuery }),
       });
 
@@ -135,9 +136,10 @@ export default function EstudioSQLPage() {
 
  const handleSaveObject = useCallback(async (payload: MetadadosPayload) => {
    try {
+     const token = typeof window !== "undefined" ? localStorage.getItem("nexus_token") : null;
      const response = await fetch(`${API_BASE_URL}/api/v1/dados/meta-objetos`, {
        method: "POST",
-       headers: { "Content-Type": "application/json" },
+       headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
        body: JSON.stringify(payload),
      });
 

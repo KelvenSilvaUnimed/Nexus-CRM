@@ -1,3 +1,5 @@
+import { getAuthHeaders } from "@/lib/auth";
+
 export const API_BASE_URL = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "").replace(/\/$/, "");
 
 export async function fetchJson<T>(
@@ -9,6 +11,7 @@ export async function fetchJson<T>(
     const response = await fetch(`${API_BASE_URL}${path}`, {
       cache: "no-store",
       ...init,
+      headers: { ...(init?.headers as Record<string, string> | undefined), ...getAuthHeaders() },
     });
     if (!response.ok) {
       return fallback;
