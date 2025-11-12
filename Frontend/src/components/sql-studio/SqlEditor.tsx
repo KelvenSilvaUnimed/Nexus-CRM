@@ -1,112 +1,120 @@
- "use client";
+"use client";
 
- import dynamic from "next/dynamic";
- import React, { useCallback, useEffect, useMemo } from "react";
+import React, { useCallback, useEffect, useState } from "react";
+import Editor from "@monaco-editor/react";
 
- const MonacoEditor = dynamic(() => import("@monaco-editor/react"), {
-   ssr: false,
- });
+interface SqlEditorProps {
+  sqlQuery: string;
+  setSqlQuery: (query: string) => void;
+  onValidationChange: (valid: boolean) => void;
+  executionTime?: string;
+}
 
- type SqlEditorProps = {
-   sqlQuery: string;
-   setSqlQuery: (value: string) => void;
-   onValidationChange?: (isValid: boolean) => void;
-   executionTime?: string;
- };
+const FORBIDDEN_COMMANDS = /\b(DROP|UPDATE|DELETE)\b/i;
 
- type ValidationLevel = "idle" | "success" | "error";
+const SqlEditor: React.FC<SqlEditorProps> = ({
+  sqlQuery,
+  setSqlQuery,
+  onValidationChange,
+  executionTime,
+}) => {
+  const [validationStatus, setValidationStatus] =
+    useState<"valid" | "error" | "none">("none");
+  const [validationMessage, setValidationMessage] = useState("");
 
- export default function SqlEditor({
-   sqlQuery,
-   setSqlQuery,
-   onValidationChange,
-   executionTime,
- }: SqlEditorProps) {
-   const forbiddenRegex = useMemo(
-     () => /\b(DROP|UPDATE|DELETE|ALTER)\b/i,
-     []
-   );
+  useEffect(() => {
+    if (sqlQuery.trim() === "") {
+      setValidationStatus("none");
+      setValidationMessage("");
+      onValidationChange(false);
+      return;
+    }
 
-   const evaluation = useMemo(() => {
-     const trimmed = sqlQuery.trim();
-     const hasForbidden = forbiddenRegex.test(sqlQuery);
+    if (FORBIDDEN_COMMANDS.test(sqlQuery)) {
+      setValidationStatus("error");
+      setValidationMessage(
+        "Comandos proibidos detectados (DROP, UPDATE, DELETE)!"
+      );
+      onValidationChange(false);
+    } else {
+      setValidationStatus("valid");
+      setValidationMessage("Consulta validada localmente.");
+      onValidationChange(true);
+    }
+  }, [sqlQuery, onValidationChange]);
 
-     if (!trimmed) {
-       return {
-         level: "idle" as ValidationLevel,
-         message: "Digite uma consulta SQL para comecar.",
-         isValid: false,
-       };
-     }
+  const handleEditorChange = useCallback(
+    (value?: string) => {
+      setSqlQuery(value ?? "");
+    },
+    [setSqlQuery]
+  );
 
-     if (hasForbidden) {
-       return {
-         level: "error" as ValidationLevel,
-         message: "Comandos proibidos detectados!",
-         isValid: false,
-       };
-     }
+  const handleDrop = useCallback(
+    (event: React.DragEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      const identifier = event.dataTransfer.getData("text/plain");
+      if (!identifier) {
+        return;
+      }
 
-     return {
-       level: "success" as ValidationLevel,
-       message: "Consulta validada e pronta para execucao / salvamento.",
-       isValid: true,
-     };
-   }, [forbiddenRegex, sqlQuery]);
+      const trimmed = sqlQuery.trimEnd();
+      const nextQuery = trimmed ? `${trimmed} ${identifier} ` : `${identifier} `;
+      setSqlQuery(nextQuery);
+    },
+    [setSqlQuery, sqlQuery]
+  );
 
-   useEffect(() => {
-     onValidationChange?.(evaluation.isValid);
-   }, [evaluation.isValid, onValidationChange]);
+  return (
+    <div
+      className="flex flex-col h-full bg-gray-900 rounded-xl border border-gray-800 overflow-hidden"
+      onDragOver={(event) => event.preventDefault()}
+      onDrop={handleDrop}
+    >
+      <header className="flex items-center justify-between px-4 py-2 border-b border-gray-800">
+        <div>
+          <p className="text-xs uppercase tracking-wide text-gray-400">Editor</p>
+          <h3 className="text-sm font-semibold text-white">Consulta SQL</h3>
+        </div>
+        {executionTime && (
+          <p className="text-xs text-gray-500">
+            Ultimo teste: <span className="text-lime-300">{executionTime}</span>
+          </p>
+        )}
+      </header>
 
-   const handleEditorChange = useCallback(
-     (value: string | undefined) => {
-       setSqlQuery(value ?? "");
-     },
-     [setSqlQuery]
-   );
+      <div className="flex-1">
+        <Editor
+          height="100%"
+          defaultLanguage="sql"
+          language="sql"
+          theme="vs-dark"
+          value={sqlQuery}
+          onChange={handleEditorChange}
+          options={{
+            fontSize: 14,
+            minimap: { enabled: false },
+            automaticLayout: true,
+            scrollBeyondLastLine: false,
+            padding: { top: 16, bottom: 16 },
+            wordWrap: "on",
+          }}
+        />
+      </div>
 
-   const validationClass =
-     evaluation.level === "error" ? "query-alert warning" : "query-status success";
+      <footer className="px-4 py-2 border-t border-gray-800 text-xs">
+        {validationStatus === "valid" && (
+          <p className="text-green-400">{validationMessage}</p>
+        )}
+        {validationStatus === "error" && (
+          <p className="text-red-500">{validationMessage}</p>
+        )}
+        {validationStatus === "none" && (
+          <p className="text-gray-500">Digite sua consulta para validar.</p>
+        )}
+      </footer>
+    </div>
+  );
+};
 
-   return (
-     <section className="query-panel">
-       <header className="query-header">
-         <div>
-           <p className="eyebrow">
-             Regular a consulta{" "}
-             {executionTime ? `(Tempo: ${executionTime})` : "(Tempo em standby)"}
-           </p>
-           <h2>Editor de Consulta SQL</h2>
-         </div>
-         <span className="badge">SQL</span>
-       </header>
-       <div className="query-editor">
-         <MonacoEditor
-           height="100%"
-           defaultLanguage="sql"
-           language="sql"
-           value={sqlQuery}
-           onChange={handleEditorChange}
-           theme="vs-dark"
-           options={{
-             minimap: { enabled: false },
-             wordWrap: "on",
-             fontSize: 14,
-             fontFamily: '"IBM Plex Mono", "Source Code Pro", monospace',
-             tabSize: 2,
-             lineNumbers: "on",
-           }}
-         />
-       </div>
-       <div className="query-footer">
-         <div className="query-state">
-           <div className={validationClass}>{evaluation.message}</div>
-         </div>
-         <div className="tag-group">
-           <span className="ghost-tag">DEFINIR NOME LEGIVEL</span>
-           <span className="ghost-tag">APLICAR FILTROS</span>
-         </div>
-       </div>
-     </section>
-   );
- }
+export default SqlEditor;

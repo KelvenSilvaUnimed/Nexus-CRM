@@ -1,15 +1,16 @@
- "use client";
+"use client";
 
- import React from "react";
+import React from "react";
 
- type WidgetBuilderToolbarProps = {
+type WidgetBuilderToolbarProps = {
   dashboardName: string;
   onDashboardNameChange: (value: string) => void;
   onAddWidget: () => void;
   onSave: () => void;
   isSaving: boolean;
   hasWidgets: boolean;
- };
+  isAddDisabled?: boolean;
+};
 
 export default function WidgetBuilderToolbar({
   dashboardName,
@@ -18,6 +19,7 @@ export default function WidgetBuilderToolbar({
   onSave,
   isSaving,
   hasWidgets,
+  isAddDisabled,
 }: WidgetBuilderToolbarProps) {
   return (
     <div className="builder-toolbar">
@@ -27,11 +29,16 @@ export default function WidgetBuilderToolbar({
           id="dashboard-name"
           value={dashboardName}
           onChange={(event) => onDashboardNameChange(event.target.value)}
-          placeholder="Ex.: Análise de Vendas Trimestral"
+          placeholder="Ex.: Analise de Vendas Trimestral"
         />
       </div>
       <div className="builder-toolbar-actions">
-        <button className="ghost-button btn-cyan" type="button" onClick={onAddWidget}>
+        <button
+          className="ghost-button btn-cyan"
+          type="button"
+          onClick={onAddWidget}
+          disabled={!!isAddDisabled}
+        >
           Adicionar Widget
         </button>
         <button

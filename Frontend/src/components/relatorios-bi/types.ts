@@ -4,17 +4,19 @@ export type WidgetDefinition = {
   id: string;
   title: string;
   chartType: WidgetType;
-  objectId: number;
+  objectId: string;
   objectLabel: string;
   groupBy: string;
   aggregate: string;
   aggregateField: string;
   data: Record<string, unknown>[];
+  publishTargets?: string[];
 };
 
 export type MetaObject = {
-  id: number;
+  metaId: string;
+  idObjeto: string;
   nomeAmigavel: string;
-  tipo: "base" | "custom";
-  fields: string[];
+  tipo: "BASE" | "CUSTOMIZADO" | "base" | "custom";
+  fields?: string[];
 };

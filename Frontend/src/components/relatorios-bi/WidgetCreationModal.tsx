@@ -1,27 +1,44 @@
- "use client";
+"use client";
 
- import React, { useMemo, useState } from "react";
- import { MetaObject, WidgetDefinition, WidgetType } from "./types";
+import React, { useMemo, useState } from "react";
+import { MetaObject, WidgetDefinition, WidgetType } from "./types";
 
- type WidgetCreationModalProps = {
+const API_BASE_URL = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "").replace(/\/$/, "");
+
+type WidgetCreationModalProps = {
   isOpen: boolean;
   metaObjects: MetaObject[];
+  metaError?: string | null;
+  isMetaLoading?: boolean;
   onClose: () => void;
   onCreateWidget: (widget: WidgetDefinition) => void;
- };
+};
 
 const chartOptions: { value: WidgetType; title: string; hint: string }[] = [
-  { value: "bar", title: "Gráfico de Barras", hint: "Comparações entre grupos" },
-  { value: "line", title: "Gráfico de Linha", hint: "Tendências ao longo do tempo" },
-  { value: "pie", title: "Gráfico de Pizza", hint: "Fatia de um total" },
-  { value: "kpi", title: "Cartão KPI", hint: "Número resumido (total/contagem)" },
+  { value: "bar", title: "Grafico de Barras", hint: "Comparacoes entre grupos" },
+  { value: "line", title: "Grafico de Linha", hint: "Tendencias ao longo do tempo" },
+  { value: "pie", title: "Grafico de Pizza", hint: "Participacao de cada categoria" },
+  { value: "kpi", title: "Cartao KPI", hint: "Numero resumido (total ou media)" },
 ];
 
-const aggregateOptions = ["SUM", "AVG", "COUNT"];
+const aggregateOptions = [
+  { value: "SUM", label: "Soma" },
+  { value: "AVG", label: "Media" },
+  { value: "COUNT", label: "Contagem" },
+];
+
+const publishTargetsOptions = [
+  { value: "DASHBOARD_INICIO", label: "Dashboard (Inicio / Geral)" },
+  { value: "MOD_VENDAS", label: "Painel do modulo de Vendas" },
+  { value: "MOD_MARKETING", label: "Painel do modulo de Marketing" },
+  { value: "MOD_TRADE", label: "Painel do modulo de Trade Marketing" },
+];
 
 export default function WidgetCreationModal({
   isOpen,
   metaObjects,
+  metaError,
+  isMetaLoading,
   onClose,
   onCreateWidget,
 }: WidgetCreationModalProps) {
@@ -32,16 +49,16 @@ export default function WidgetCreationModal({
   const [groupBy, setGroupBy] = useState("");
   const [aggregateField, setAggregateField] = useState("");
   const [aggregate, setAggregate] = useState("SUM");
-  const [statusMessage, setStatusMessage] = useState("");
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [publishTargets, setPublishTargets] = useState<string[]>(["DASHBOARD_INICIO", "MOD_VENDAS"]);
 
   const filteredObjects = useMemo(() => {
-    if (!search.trim()) {
+    const lower = search.trim().toLowerCase();
+    if (!lower) {
       return metaObjects;
     }
-    return metaObjects.filter((obj) =>
-      obj.nomeAmigavel.toLowerCase().includes(search.toLowerCase())
-    );
+    return metaObjects.filter((object) => object.nomeAmigavel.toLowerCase().includes(lower));
   }, [metaObjects, search]);
 
   const resetState = () => {
@@ -52,29 +69,32 @@ export default function WidgetCreationModal({
     setGroupBy("");
     setAggregateField("");
     setAggregate("SUM");
-    setStatusMessage("");
+    setStatusMessage(null);
     setIsProcessing(false);
+    setPublishTargets(["DASHBOARD_INICIO", "MOD_VENDAS"]);
   };
 
   const handleClose = () => {
+    if (isProcessing) return;
     resetState();
     onClose();
   };
 
   const handleConfirm = async () => {
     if (!selectedObject || !groupBy || !aggregateField) {
-      setStatusMessage("Selecione a fonte, o eixo X e o eixo Y antes de prosseguir.");
+      setStatusMessage("Escolha fonte, eixo X e eixo Y para continuar.");
       return;
     }
 
-    setStatusMessage("");
+    setStatusMessage(null);
     setIsProcessing(true);
+
     try {
-      const response = await fetch("/api/v1/data/query/no-code", {
+      const response = await fetch(`${API_BASE_URL}/api/v1/dados/query/no-code`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          objectId: selectedObject.id,
+          objectId: selectedObject.metaId,
           groupBy,
           aggregate,
           aggregateField,
@@ -86,73 +106,108 @@ export default function WidgetCreationModal({
       }
 
       const data = await response.json();
-      const rows: Record<string, unknown>[] =
-        Array.isArray(data.rows) || Array.isArray(data.data)
-          ? (data.rows ?? data.data ?? [])
-          : [];
+      const rows = Array.isArray(data?.rows)
+        ? data.rows
+        : Array.isArray(data?.data)
+        ? data.data
+        : [];
 
       onCreateWidget({
         id: `widget-${Date.now()}`,
-        title: `${chartOptions.find((option) => option.value === chartType)?.title ?? "Widget"}`,
+        title: chartOptions.find((option) => option.value === chartType)?.title ?? "Widget",
         chartType,
-        objectId: selectedObject.id,
+        objectId: selectedObject.metaId,
         objectLabel: selectedObject.nomeAmigavel,
         groupBy,
         aggregate,
         aggregateField,
         data: rows,
+        publishTargets,
       });
       handleClose();
     } catch (error) {
       console.error(error);
-      setStatusMessage("Não foi possível criar o widget, tente novamente.");
+      setStatusMessage("Nao foi possivel criar o widget. Tente novamente.");
     } finally {
       setIsProcessing(false);
     }
   };
 
-  if (!isOpen) return null;
+  if (!isOpen) {
+    return null;
+  }
 
   return (
     <div className="modal-backdrop" role="dialog" aria-modal="true">
       <div className="builder-modal">
         <header className="builder-modal-header">
           <div>
-            <p className="eyebrow">Fluxo de Widget</p>
+            <p className="eyebrow">Fluxo de widget</p>
             <h3>Adicionar novo widget</h3>
           </div>
-          <button type="button" className="ghost-button small" onClick={handleClose}>
+          <button type="button" className="ghost-button small" onClick={handleClose} disabled={isProcessing}>
             Fechar
           </button>
         </header>
 
-        <div className="builder-steps">
-          <span className={step === 1 ? "active" : ""}>1. Fonte de Dados</span>
-          <span className={step === 2 ? "active" : ""}>2. Tipo de Visualização</span>
-          <span className={step === 3 ? "active" : ""}>3. Configuração</span>
+        <div className="modal-progress">
+          {[1, 2, 3].map((stepNumber) => (
+            <div
+              key={`step-${stepNumber}`}
+              className={`modal-progress-step ${step >= stepNumber ? "active" : ""}`}
+            >
+              <span>{stepNumber}</span>
+              <p>
+                {stepNumber === 1 && "Fonte de dados"}
+                {stepNumber === 2 && "Tipo de visual"}
+                {stepNumber === 3 && "Configuracao"}
+              </p>
+            </div>
+          ))}
         </div>
 
         {step === 1 && (
-          <div className="modal-section">
+          <div className="modal-section space-y-4">
+            <label className="text-sm text-gray-400" htmlFor="search-objects">
+              Escolha a fonte de dados
+            </label>
             <input
-              placeholder="Buscar objetos amigáveis"
+              id="search-objects"
+              className="w-full rounded-md bg-gray-900 border border-gray-700 px-3 py-2 text-white"
+              placeholder="Busque pelo nome amigavel"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
+              disabled={isMetaLoading}
             />
-            <div className="object-list">
-              {filteredObjects.map((object) => (
-                <button
-                  key={object.id}
-                  type="button"
-                  className={`object-item ${selectedObject?.id === object.id ? "active" : ""}`}
-                  onClick={() => setSelectedObject(object)}
-                >
-                  <strong>{object.nomeAmigavel}</strong>
-                  <span>{object.tipo === "custom" ? "Customizado" : "Base"}</span>
-                </button>
-              ))}
-              {!filteredObjects.length && <p className="muted">Nenhum objeto encontrado.</p>}
-            </div>
+            {isMetaLoading ? (
+              <div className="h-40 flex items-center justify-center text-gray-400">Carregando objetos...</div>
+            ) : metaError ? (
+              <div className="p-4 border border-red-500/40 bg-red-500/10 text-red-200 rounded-md text-sm">
+                {metaError}
+              </div>
+            ) : filteredObjects.length ? (
+              <div className="object-list">
+                {filteredObjects.map((object) => (
+                  <button
+                    key={object.metaId}
+                    type="button"
+                    className={`object-card ${selectedObject?.metaId === object.metaId ? "active" : ""}`}
+                    onClick={() => {
+                      setSelectedObject(object);
+                      setGroupBy("");
+                      setAggregateField("");
+                    }}
+                  >
+                    <strong>{object.nomeAmigavel}</strong>
+                    <span>
+                      {(object.tipo ?? "").toString().toUpperCase() === "BASE" ? "Base" : "Customizado"}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-400">Nenhum objeto encontrado.</p>
+            )}
           </div>
         )}
 
@@ -178,7 +233,7 @@ export default function WidgetCreationModal({
           <div className="modal-section modal-section-config">
             <div className="config-columns">
               <div>
-                <p className="eyebrow">Eixo X (Agrupamento)</p>
+                <p className="eyebrow">Eixo X (agrupamento)</p>
                 <div className="field-zone">
                   {(selectedObject?.fields ?? []).map((field) => (
                     <button
@@ -193,7 +248,7 @@ export default function WidgetCreationModal({
                 </div>
               </div>
               <div>
-                <p className="eyebrow">Eixo Y (Valor)</p>
+                <p className="eyebrow">Eixo Y (valor)</p>
                 <div className="field-zone">
                   {(selectedObject?.fields ?? []).map((field) => (
                     <button
@@ -207,11 +262,15 @@ export default function WidgetCreationModal({
                   ))}
                 </div>
                 <label className="eyebrow">
-                  Agregação
-                  <select value={aggregate} onChange={(event) => setAggregate(event.target.value)}>
+                  Agregacao
+                  <select
+                    value={aggregate}
+                    onChange={(event) => setAggregate(event.target.value)}
+                    className="mt-2 w-full rounded-md bg-gray-900 border border-gray-700 px-3 py-2"
+                  >
                     {aggregateOptions.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
+                      <option key={option.value} value={option.value}>
+                        {option.label}
                       </option>
                     ))}
                   </select>
@@ -223,25 +282,46 @@ export default function WidgetCreationModal({
               <pre>
                 {JSON.stringify(
                   {
-                    objectId: selectedObject?.id ?? "—",
-                    groupBy: groupBy || "—",
+                    objectId: selectedObject?.metaId ?? "--",
+                    groupBy: groupBy || "--",
                     aggregate,
-                    aggregateField: aggregateField || "—",
+                    aggregateField: aggregateField || "--",
+                    publishTargets,
                   },
                   null,
                   2
                 )}
               </pre>
             </div>
+            <div>
+              <p className="eyebrow">Publicar este widget em</p>
+              <div className="flex flex-wrap gap-2 mt-2">
+                {publishTargetsOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className={`field-chip ${publishTargets.includes(option.value) ? "active" : ""}`}
+                    onClick={() => togglePublishTarget(option.value)}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         )}
 
-        {statusMessage && <p className="muted">{statusMessage}</p>}
+        {statusMessage && <p className="text-sm text-yellow-400">{statusMessage}</p>}
 
         <footer className="builder-modal-footer">
           <div>
             {step > 1 && (
-              <button type="button" className="ghost-button small" onClick={() => setStep((prev) => prev - 1)}>
+              <button
+                type="button"
+                className="ghost-button small"
+                onClick={() => setStep((current) => current - 1)}
+                disabled={isProcessing}
+              >
                 Voltar
               </button>
             )}
@@ -251,10 +331,10 @@ export default function WidgetCreationModal({
               <button
                 type="button"
                 className="primary-button"
-                onClick={() => setStep((prev) => prev + 1)}
-                disabled={step === 1 && !selectedObject}
+                onClick={() => setStep((current) => current + 1)}
+                disabled={(step === 1 && !selectedObject) || isProcessing}
               >
-                Próximo
+                Proximo
               </button>
             )}
             {step === 3 && (
@@ -273,3 +353,8 @@ export default function WidgetCreationModal({
     </div>
   );
 }
+  const togglePublishTarget = (target: string) => {
+    setPublishTargets((current) =>
+      current.includes(target) ? current.filter((item) => item !== target) : [...current, target]
+    );
+  };

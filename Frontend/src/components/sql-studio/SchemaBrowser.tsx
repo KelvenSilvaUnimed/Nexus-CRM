@@ -1,115 +1,116 @@
- "use client";
+import React, { useState, useEffect } from "react";
 
- import React, { useEffect, useState } from "react";
+interface SchemaBrowserProps {
+  onInsertReference: (name: string) => void;
+  refreshKey: number;
+}
 
- type SchemaBrowserProps = {
-   onInsertReference: (identifier: string) => void;
-   refreshKey?: number;
- };
+interface SchemasResponse {
+  tabelasBase?: string[];
+  objetosCustom?: string[];
+}
 
- type SchemaResponse = {
-   tabelasBase?: string[];
-   objetosCustom?: string[];
- };
+const SchemaBrowser: React.FC<SchemaBrowserProps> = ({
+  onInsertReference,
+  refreshKey,
+}) => {
+  const [isLoading, setIsLoading] = useState(true);
+  const [tabelasBaseList, setTabelasBaseList] = useState<string[]>([]);
+  const [objetosCustomList, setObjetosCustomList] = useState<string[]>([]);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
- export default function SchemaBrowser({
-   onInsertReference,
-   refreshKey,
- }: SchemaBrowserProps) {
-   const [isLoading, setIsLoading] = useState(true);
-   const [tabelasBaseList, setTabelasBaseList] = useState<string[]>([]);
-   const [objetosCustomList, setObjetosCustomList] = useState<string[]>([]);
-   const [error, setError] = useState<string | null>(null);
+  const apiBaseUrl =
+    typeof process !== "undefined"
+      ? (process.env.NEXT_PUBLIC_BACKEND_URL ?? "").replace(/\/$/, "")
+      : "";
 
-   useEffect(() => {
-     let isMounted = true;
+  useEffect(() => {
+    let isMounted = true;
 
-     async function fetchSchemas() {
-       setIsLoading(true);
-       try {
-         const response = await fetch("/api/v1/meta/schemas");
-         if (!response.ok) {
-           throw new Error(`Falha ao buscar schemas (${response.status})`);
-         }
-         const data: SchemaResponse = await response.json();
-         if (!isMounted) return;
-         setTabelasBaseList(data.tabelasBase ?? []);
-         setObjetosCustomList(data.objetosCustom ?? []);
-         setError(null);
-       } catch (fetchError) {
-         console.error(fetchError);
-         if (isMounted) {
-           setError("Nao foi possivel carregar os schemas.");
-         }
-       } finally {
-         if (isMounted) {
-           setIsLoading(false);
-         }
-       }
-     }
+    const fetchSchemas = async () => {
+      setIsLoading(true);
+      setErrorMessage(null);
 
-     fetchSchemas();
+      try {
+        const response = await fetch(`${apiBaseUrl}/api/v1/dados/meta/schemas`);
+        if (!response.ok) {
+          throw new Error(`Erro ao carregar schemas (${response.status})`);
+        }
 
-     return () => {
-       isMounted = false;
-     };
-   }, [refreshKey]);
+        const data: SchemasResponse = await response.json();
+        if (!isMounted) return;
 
-   const groups = [
-     {
-       title: "TABELAS BASE",
-       icon: "[T]",
-       items: tabelasBaseList,
-       count: tabelasBaseList.length,
-     },
-     {
-       title: "OBJETOS CUSTOMIZADOS",
-       icon: "[C]",
-       items: objetosCustomList,
-       count: objetosCustomList.length,
-     },
-   ];
+        setTabelasBaseList(Array.isArray(data.tabelasBase) ? data.tabelasBase : []);
+        setObjetosCustomList(
+          Array.isArray(data.objetosCustom) ? data.objetosCustom : []
+        );
+      } catch (error) {
+        console.error(error);
+        if (isMounted) {
+          setErrorMessage("Nao foi possivel carregar os schemas.");
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    };
 
-   return (
-     <aside className="schema-panel">
-       <div className="schema-title">Explorador de Dados</div>
-       {isLoading ? (
-         <div className="spinner" aria-label="Buscando objetos e tabelas" />
-       ) : error ? (
-         <p className="muted">{error}</p>
-       ) : (
-         groups.map((group) => (
-           <div key={group.title} className="schema-group">
-             <div className="schema-header">
-               <div className="schema-heading">
-                 <span className="schema-icon" aria-hidden="true">
-                   {group.icon}
-                 </span>
-                 <strong>{group.title}</strong>
-               </div>
-              <div className="schema-info">
-                <span>{group.count}</span>
-                <span className="schema-arrow" aria-hidden="true">
-                  v
-                </span>
-              </div>
-             </div>
-             <ul>
-               {group.items.map((item) => (
-                 <li key={item}>
-                   <button
-                     type="button"
-                     className="schema-item"
-                     onClick={() => onInsertReference(item)}
-                   >
-                     {item}
-                   </button>
-                 </li>
-               ))}
-             </ul>
-           </div>
-         ))
-       )}
-     </aside>
-   );
- }
+    fetchSchemas();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [apiBaseUrl, refreshKey]);
+
+  const renderList = (title: string, items: string[]) => (
+    <div className="mb-6">
+      <h3 className="text-sm font-semibold text-gray-300 tracking-wide uppercase mb-3">
+        {title} <span className="text-lime-400">({items.length})</span>
+      </h3>
+      <ul className="space-y-1">
+        {items.map((item) => (
+          <li
+            key={item}
+            draggable
+            onDragStart={(event) => event.dataTransfer.setData("text/plain", item)}
+            onClick={() => onInsertReference(item)}
+            className="px-3 py-1.5 bg-gray-900 rounded-md text-gray-200 hover:text-lime-300 hover:bg-gray-800 cursor-pointer transition-colors"
+            title="Clique para inserir no editor"
+          >
+            {item}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+
+  return (
+    <aside className="p-4 bg-black h-full text-white border border-gray-800 rounded-xl">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-semibold text-lime-400">Navegador</h2>
+        {isLoading ? (
+          <span className="text-xs text-gray-400">Sincronizando...</span>
+        ) : (
+          <span className="text-xs text-gray-500">atualizado</span>
+        )}
+      </div>
+
+      {isLoading ? (
+        <div className="flex flex-col justify-center items-center h-full space-y-2">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-lime-400" />
+          <p className="text-sm text-gray-400">Carregando objetos</p>
+        </div>
+      ) : errorMessage ? (
+        <p className="text-sm text-red-400">{errorMessage}</p>
+      ) : (
+        <>
+          {renderList("Tabelas base", tabelasBaseList)}
+          {renderList("Objetos customizados", objetosCustomList)}
+        </>
+      )}
+    </aside>
+  );
+};
+
+export default SchemaBrowser;

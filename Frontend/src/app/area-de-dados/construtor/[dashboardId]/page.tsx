@@ -1,218 +1,313 @@
- "use client";
+"use client";
 
- import { useCallback, useEffect, useMemo, useState } from "react";
- import { useParams } from "next/navigation";
- import AppShell from "@/components/layout/AppShell";
- import DashboardCanvas from "@/components/relatorios-bi/DashboardCanvas";
- import WidgetBuilderToolbar from "@/components/relatorios-bi/WidgetBuilderToolbar";
- import WidgetCreationModal from "@/components/relatorios-bi/WidgetCreationModal";
- import { MetaObject, WidgetDefinition } from "@/components/relatorios-bi/types";
- import type { Layout } from "react-grid-layout";
- import "react-grid-layout/css/styles.css";
- import "react-resizable/css/styles.css";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { Layout } from "react-grid-layout";
+import AppShell from "@/components/layout/AppShell";
+import WidgetBuilderToolbar from "@/components/relatorios-bi/WidgetBuilderToolbar";
+import DashboardCanvas from "@/components/relatorios-bi/DashboardCanvas";
+import WidgetCreationModal from "@/components/relatorios-bi/WidgetCreationModal";
+import { MetaObject, WidgetDefinition, WidgetType } from "@/components/relatorios-bi/types";
 
-const sampleWidgets: WidgetDefinition[] = [
-  {
-    id: "widget-vendas",
-    title: "Gráfico de Barras",
-    objectId: 9001,
-    objectLabel: "Vendas por Campanha (Customizado)",
-    chartType: "bar",
-    groupBy: "CAMPANHA_NOME",
-    aggregate: "SUM",
-    aggregateField: "VALOR_ESTIMADO",
-    data: [
-      { CAMPANHA_NOME: "Campanha A", VALOR_ESTIMADO: 78000 },
-      { CAMPANHA_NOME: "Campanha B", VALOR_ESTIMADO: 54000 },
-    ],
-  },
-];
+const API_BASE_URL = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "").replace(/\/$/, "");
 
-const sampleMetaObjects: MetaObject[] = [
-  {
-    id: 9001,
-    nomeAmigavel: "Vendas por Campanha (Customizado)",
-    tipo: "custom",
-    fields: ["CAMPANHA_NOME", "VALOR_ESTIMADO", "DATA_LANCAMENTO"],
-  },
-  {
-    id: 8002,
-    nomeAmigavel: "Oportunidades (Base)",
-    tipo: "base",
-    fields: ["OPORTUNIDADE_ID", "ETAPA", "VALOR_ESTIMADO"],
-  },
-];
+type DashboardApiResponse = {
+  id?: string | number;
+  name?: string;
+  titulo?: string;
+  widgets?: unknown[];
+  layout?: Layout[];
+};
 
-export default function DashboardBuilderPage() {
-  const params = useParams();
-  const dashboardId = params.dashboardId ?? "novo";
+const normalizeWidget = (widget: any, fallbackIndex: number): WidgetDefinition => {
+  const chartType = (widget?.chartType ?? widget?.tipo ?? "bar") as WidgetType;
+  return {
+    id: String(widget?.id ?? widget?.widgetId ?? `widget-${fallbackIndex}`),
+    title: widget?.title ?? widget?.nome ?? "Widget sem titulo",
+    chartType,
+    objectId: String(
+      widget?.objectId ??
+        widget?.metaObjectId ??
+        widget?.object?.metaId ??
+        widget?.object?.id ??
+        widget?.idObjeto ??
+        fallbackIndex
+    ),
+    objectLabel:
+      widget?.objectLabel ?? widget?.objectName ?? widget?.object?.nomeAmigavel ?? "Objeto",
+    groupBy: widget?.groupBy ?? widget?.eixoX ?? "",
+    aggregate: widget?.aggregate ?? widget?.agregacao ?? "SUM",
+    aggregateField: widget?.aggregateField ?? widget?.eixoY ?? "",
+    data: Array.isArray(widget?.data) ? widget.data : Array.isArray(widget?.rows) ? widget.rows : [],
+    publishTargets: Array.isArray(widget?.publishTargets) ? widget.publishTargets : [],
+  };
+};
 
-  const [dashboardName, setDashboardName] = useState("");
+const normalizeLayout = (layout: any, widgets: WidgetDefinition[]): Layout[] => {
+  if (Array.isArray(layout) && layout.length) {
+    return layout
+      .map((item, index) => ({
+        i: String(item?.i ?? widgets[index]?.id ?? `widget-${index}`),
+        x: typeof item?.x === "number" ? item.x : ((index * 4) % 12),
+        y: typeof item?.y === "number" ? item.y : Math.floor(index / 3) * 3,
+        w: typeof item?.w === "number" ? item.w : 4,
+        h: typeof item?.h === "number" ? item.h : 4,
+      }))
+      .filter((item) => widgets.some((widget) => widget.id === item.i));
+  }
+
+  return widgets.map((widget, index) => ({
+    i: widget.id,
+    x: ((index * 4) % 12),
+    y: Math.floor(index / 3) * 3,
+    w: widget.chartType === "kpi" ? 4 : 6,
+    h: widget.chartType === "kpi" ? 3 : 4,
+  }));
+};
+
+const normalizeMetaObjects = (payload: any): MetaObject[] => {
+  const list: any[] = Array.isArray(payload)
+    ? payload
+    : Array.isArray(payload?.metaObjects)
+    ? payload.metaObjects
+    : Array.isArray(payload?.objetos)
+    ? payload.objetos
+    : [];
+
+  return list
+    .map((item) => {
+      const fields =
+        Array.isArray(item?.fields) && item.fields.every((field: any) => typeof field === "string")
+          ? (item.fields as string[])
+          : Array.isArray(item?.columns)
+          ? item.columns
+              .map((column: any) => column?.name ?? column?.nome ?? column?.label)
+              .filter((value: unknown): value is string => typeof value === "string")
+          : [];
+
+      const metaId = String(item?.metaId ?? item?.id ?? item?.objectId ?? "");
+      if (!metaId) {
+        return null;
+      }
+
+      const rawTipo = (item?.tipo ?? item?.kind ?? "custom").toString().toUpperCase();
+      return {
+        metaId,
+        idObjeto: item?.idObjeto ?? item?.slug ?? item?.apiName ?? metaId,
+        nomeAmigavel: item?.nomeAmigavel ?? item?.name ?? "Objeto sem nome",
+        tipo: rawTipo === "BASE" ? "BASE" : "CUSTOMIZADO",
+        fields,
+      } as MetaObject;
+    })
+    .filter((item): item is MetaObject => Boolean(item));
+};
+
+export default function DashboardBuilderPage({ params }: { params: { dashboardId: string } }) {
+  const isNewDashboard = params.dashboardId === "novo";
+
+  const [dashboardName, setDashboardName] = useState(isNewDashboard ? "Novo Dashboard" : "");
   const [widgets, setWidgets] = useState<WidgetDefinition[]>([]);
   const [layout, setLayout] = useState<Layout[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [statusMessage, setStatusMessage] = useState("");
+  const [saveError, setSaveError] = useState<string | null>(null);
+
   const [metaObjects, setMetaObjects] = useState<MetaObject[]>([]);
-  const [metaLoading, setMetaLoading] = useState(true);
+  const [isMetaLoading, setIsMetaLoading] = useState(true);
+  const [metaError, setMetaError] = useState<string | null>(null);
+
+  const [isDashboardLoading, setIsDashboardLoading] = useState(!isNewDashboard);
+  const [dashboardError, setDashboardError] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
-    async function loadMetaObjects() {
+
+    const fetchMetaObjects = async () => {
+      setIsMetaLoading(true);
+      setMetaError(null);
       try {
-        const response = await fetch("/api/v1/meta-objetos");
+        const response = await fetch(`${API_BASE_URL}/api/v1/dados/meta-objetos`);
         if (!response.ok) {
-          throw new Error("Falha ao buscar objetos");
+          throw new Error(`Erro ao carregar objetos (${response.status})`);
         }
         const data = await response.json();
-        if (!isMounted) return;
-        setMetaObjects(Array.isArray(data) ? data : data.objects ?? sampleMetaObjects);
+        if (isMounted) {
+          setMetaObjects(normalizeMetaObjects(data));
+        }
       } catch (error) {
         console.error(error);
         if (isMounted) {
-          setMetaObjects(sampleMetaObjects);
+          setMetaError("Nao foi possivel carregar os objetos do Estudio SQL.");
         }
       } finally {
         if (isMounted) {
-          setMetaLoading(false);
+          setIsMetaLoading(false);
         }
       }
-    }
-    loadMetaObjects();
+    };
+
+    fetchMetaObjects();
     return () => {
       isMounted = false;
     };
   }, []);
 
   useEffect(() => {
+    if (isNewDashboard) {
+      setIsDashboardLoading(false);
+      return;
+    }
+
     let isMounted = true;
-    async function loadDashboard() {
-      if (!dashboardId || dashboardId === "novo") {
-        setWidgets(sampleWidgets);
-        setLayout([
-          { i: sampleWidgets[0].id, x: 0, y: 0, w: 6, h: 4 },
-        ]);
-        return;
-      }
+
+    const fetchDashboard = async () => {
+      setIsDashboardLoading(true);
+      setDashboardError(null);
       try {
-        const response = await fetch(`/api/v1/dashboards/${dashboardId}`);
+        const response = await fetch(`${API_BASE_URL}/api/v1/dados/dashboards/${params.dashboardId}`);
         if (!response.ok) {
-          throw new Error("Não foi possível carregar o dashboard");
+          throw new Error(`Erro ao carregar dashboard (${response.status})`);
         }
-        const data = await response.json();
-        if (!isMounted) return;
-        setDashboardName(data.name ?? "");
-        setWidgets(data.widgets ?? []);
-        setLayout(
-          (data.widgets ?? []).map((widget: WidgetDefinition, index: number) => ({
-            i: widget.id,
-            x: (index * 2) % 12,
-            y: Infinity,
-            w: 6,
-            h: 4,
-          }))
-        );
+
+        const data: DashboardApiResponse = await response.json();
+        const normalizedWidgets: WidgetDefinition[] = Array.isArray(data?.widgets)
+          ? data!.widgets!.map((widget, index) => normalizeWidget(widget, index))
+          : [];
+
+        if (isMounted) {
+          setDashboardName(data?.name ?? data?.titulo ?? "Dashboard sem nome");
+          setWidgets(normalizedWidgets);
+          setLayout(normalizeLayout(data?.layout, normalizedWidgets));
+        }
       } catch (error) {
         console.error(error);
         if (isMounted) {
-          setWidgets(sampleWidgets);
-          setLayout([{ i: sampleWidgets[0].id, x: 0, y: 0, w: 6, h: 4 }]);
+          setDashboardError("Nao foi possivel carregar este dashboard.");
+        }
+      } finally {
+        if (isMounted) {
+          setIsDashboardLoading(false);
         }
       }
-    }
-    loadDashboard();
+    };
+
+    fetchDashboard();
     return () => {
       isMounted = false;
     };
-  }, [dashboardId]);
+  }, [isNewDashboard, params.dashboardId]);
 
-  const handleOpenModal = useCallback(() => {
-    setIsModalOpen(true);
-  }, []);
-
-  const handleCloseModal = useCallback(() => {
-    setIsModalOpen(false);
-  }, []);
-
-  const handleCreateWidget = useCallback((widget: WidgetDefinition) => {
-    setWidgets((current) => [...current, widget]);
-    setLayout((current) => [
-      ...current,
-      {
-        i: widget.id,
-        x: (current.length * 2) % 12,
-        y: Infinity,
-        w: 6,
-        h: 4,
-      },
-    ]);
-  }, []);
-
-  const handleLayoutChange = useCallback((nextLayout: Layout[]) => {
-    setLayout(nextLayout);
-  }, []);
+  const handleCreateWidget = useCallback(
+    (newWidget: WidgetDefinition) => {
+      setWidgets((prev) => [...prev, newWidget]);
+      setLayout((previous) => [
+        ...previous,
+        {
+          i: newWidget.id,
+          x: 0,
+          y: Infinity,
+          w: newWidget.chartType === "kpi" ? 4 : 6,
+          h: newWidget.chartType === "kpi" ? 3 : 4,
+        },
+      ]);
+      setIsModalOpen(false);
+    },
+    []
+  );
 
   const handleRemoveWidget = useCallback((widgetId: string) => {
-    setWidgets((current) => current.filter((widget) => widget.id !== widgetId));
-    setLayout((current) => current.filter((item) => item.i !== widgetId));
+    setWidgets((prev) => prev.filter((widget) => widget.id !== widgetId));
+    setLayout((prev) => prev.filter((item) => item.i !== widgetId));
   }, []);
 
-  const handleSaveDashboard = useCallback(async () => {
-    if (!dashboardName.trim() || !widgets.length) {
-      setStatusMessage("Defina um nome e adicione pelo menos um widget antes de salvar.");
-      return;
-    }
+  const handleLayoutChange = useCallback((newLayout: Layout[]) => {
+    setLayout(newLayout);
+  }, []);
+
+  const handleSave = useCallback(async () => {
+    setSaveError(null);
     setIsSaving(true);
-    setStatusMessage("");
     try {
-      const response = await fetch("/api/v1/dashboards", {
-        method: "POST",
+      const payload = {
+        id: isNewDashboard ? undefined : params.dashboardId,
+        name: dashboardName,
+        widgets,
+        layout,
+      };
+
+      const endpoint = isNewDashboard
+        ? `${API_BASE_URL}/api/v1/dados/dashboards`
+        : `${API_BASE_URL}/api/v1/dados/dashboards/${params.dashboardId}`;
+
+      const response = await fetch(endpoint, {
+        method: isNewDashboard ? "POST" : "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: dashboardId !== "novo" ? dashboardId : undefined,
-          name: dashboardName.trim(),
-          widgets,
-        }),
+        body: JSON.stringify(payload),
       });
+
       if (!response.ok) {
-        throw new Error("Falha ao salvar o dashboard");
+        throw new Error(`Falha ao salvar (${response.status})`);
       }
-      setStatusMessage("Dashboard salvo com sucesso.");
+
+      alert("Dashboard salvo com sucesso!");
     } catch (error) {
       console.error(error);
-      setStatusMessage("Não foi possível salvar o dashboard.");
+      setSaveError("Nao foi possivel salvar o dashboard. Tente novamente.");
     } finally {
       setIsSaving(false);
     }
-  }, [dashboardId, dashboardName, widgets]);
+  }, [dashboardName, isNewDashboard, layout, params.dashboardId, widgets]);
 
-  const metaSource = useMemo(() => metaObjects, [metaObjects]);
+  const canAddWidget = useMemo(() => !isMetaLoading && !!metaObjects.length, [isMetaLoading, metaObjects]);
 
   return (
     <AppShell>
-      <div className="builder-shell">
+      <div className="space-y-6 p-4 md:p-8">
         <WidgetBuilderToolbar
           dashboardName={dashboardName}
           onDashboardNameChange={setDashboardName}
-          onAddWidget={handleOpenModal}
-          onSave={handleSaveDashboard}
+          onAddWidget={() => setIsModalOpen(true)}
+          onSave={handleSave}
           isSaving={isSaving}
           hasWidgets={widgets.length > 0}
+          isAddDisabled={!canAddWidget}
         />
-        <DashboardCanvas
-          widgets={widgets}
-          layout={layout}
-          onLayoutChange={handleLayoutChange}
-          onRemoveWidget={handleRemoveWidget}
-        />
-        {statusMessage && <p className="muted builder-status">{statusMessage}</p>}
+
+        {saveError && (
+          <div className="p-4 rounded-lg border border-red-500/40 bg-red-500/10 text-red-200 text-sm">
+            {saveError}
+          </div>
+        )}
+
+        {dashboardError && (
+          <div className="p-4 rounded-lg border border-red-500/40 bg-red-500/10 text-red-200 text-sm">
+            {dashboardError}
+          </div>
+        )}
+
+        {isDashboardLoading ? (
+          <div className="border border-gray-800 rounded-xl p-10 text-center text-gray-400">
+            Carregando dashboard...
+          </div>
+        ) : (
+          <DashboardCanvas
+            widgets={widgets}
+            layout={layout}
+            onLayoutChange={handleLayoutChange}
+            onRemoveWidget={handleRemoveWidget}
+          />
+        )}
       </div>
-      <WidgetCreationModal
-        isOpen={isModalOpen}
-        onClose={handleCloseModal}
-        metaObjects={metaLoading ? sampleMetaObjects : metaSource}
-        onCreateWidget={handleCreateWidget}
-      />
+
+      {isModalOpen && (
+        <WidgetCreationModal
+          isOpen={isModalOpen}
+          metaObjects={metaObjects}
+          metaError={metaError}
+          isMetaLoading={isMetaLoading}
+          onClose={() => setIsModalOpen(false)}
+          onCreateWidget={handleCreateWidget}
+        />
+      )}
     </AppShell>
   );
 }

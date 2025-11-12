@@ -1,17 +1,17 @@
- "use client";
+"use client";
 
- import React, { useMemo } from "react";
- import { Layout, Responsive, WidthProvider } from "react-grid-layout";
- import { WidgetDefinition } from "./types";
+import React, { useMemo } from "react";
+import { Layout, Responsive, WidthProvider } from "react-grid-layout";
+import { WidgetDefinition } from "./types";
 
- const ResponsiveGridLayout = WidthProvider(Responsive);
+const ResponsiveGridLayout = WidthProvider(Responsive);
 
- type DashboardCanvasProps = {
+type DashboardCanvasProps = {
   widgets: WidgetDefinition[];
   layout: Layout[];
   onLayoutChange: (layout: Layout[]) => void;
   onRemoveWidget: (widgetId: string) => void;
- };
+};
 
 export default function DashboardCanvas({
   widgets,
@@ -28,7 +28,7 @@ export default function DashboardCanvas({
         x: (index * 2) % 12,
         y: Infinity,
         w: 6,
-        h: 4,
+        h: widget.chartType === "kpi" ? 3 : 4,
       };
     });
 
@@ -60,7 +60,7 @@ export default function DashboardCanvas({
     <section className="canvas-panel">
       <header>
         <h3>Canvas do Dashboard</h3>
-        <p className="muted">Arraste e redimensione cada visualização como preferir.</p>
+        <p className="muted">Arraste e redimensione cada visualizacao como preferir.</p>
       </header>
       <ResponsiveGridLayout
         className="layout"
@@ -86,7 +86,7 @@ export default function DashboardCanvas({
                 className="ghost-button small"
                 onClick={() => onRemoveWidget(widget.id)}
               >
-                ×
+                Remover
               </button>
             </header>
             <div className="widget-body">
@@ -94,8 +94,8 @@ export default function DashboardCanvas({
               <div className="widget-preview">
                 {widget.data.slice(0, 4).map((row, index) => (
                   <div key={`${widget.id}-${index}`} className="widget-preview-row">
-                    <strong>{row[widget.groupBy]}</strong>
-                    <span>{row[widget.aggregateField]}</span>
+                    <strong>{row[widget.groupBy] as string}</strong>
+                    <span>{String(row[widget.aggregateField] ?? "")}</span>
                   </div>
                 ))}
               </div>

@@ -10,6 +10,9 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://nexus:nexus@localhost:5432/nexus_crm"
     tenant_admin_schema: str = "tenant_admin"
     sqlalchemy_echo: bool = False
+    default_tenant_id: str = "tenant_demo"
+    default_user_id: str = "user_demo"
+    default_user_roles: str = "user,data_admin"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
