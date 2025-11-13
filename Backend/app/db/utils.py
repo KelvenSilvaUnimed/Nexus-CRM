@@ -7,8 +7,9 @@ async def set_tenant_search_path(session: AsyncSession, tenant_schema: str) -> N
 
     Use at the beginning of a request-bound transaction.
     """
+    # Postgres nao aceita bind parameters em SET LOCAL search_path.
+    # Usamos set_config com is_local=True para efeito transacional e parametro seguro.
     await session.execute(
-        text("SET LOCAL search_path TO :s1, tenant_admin"),
-        {"s1": tenant_schema},
+        text("SELECT set_config('search_path', :path, true)"),
+        {"path": f"{tenant_schema}, tenant_admin"},
     )
-

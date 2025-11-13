@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { logout } from "@/lib/auth";
 
 type Submodule = {
@@ -20,58 +20,59 @@ type Module = {
 const modules: Module[] = [
   {
     title: "INICIO / GERAL",
-    icon: "🧭",
+    icon: "",
     submodules: [
-      { label: "Dashboard", href: "/dashboard", icon: "📊" },
-      { label: "Minhas Atividades", href: "/inicio/atividades", icon: "📝" },
-      { label: "Calendario", href: "/inicio/calendario", icon: "📅" },
-      { label: "Lembretes", href: "/inicio/lembretes", icon: "⏰" },
+      { label: "Dashboard", href: "/dashboard", icon: "" },
+      { label: "Minhas Atividades", href: "/inicio/atividades", icon: "" },
+      { label: "Calendario", href: "/inicio/calendario", icon: "" },
+      { label: "Lembretes", href: "/inicio/lembretes", icon: "" },
     ],
   },
   {
     title: "VENDAS",
-    icon: "💼",
+    icon: "",
     submodules: [
-      { label: "Painel do modulo", href: "/vendas", icon: "📈" },
-      { label: "Leads / Prospects", href: "/vendas/leads", icon: "🧲" },
-      { label: "Oportunidades / Funil", href: "/vendas/oportunidades", icon: "🎯" },
-      { label: "Contas e Contatos", href: "/vendas/contas-contatos", icon: "👥" },
-      { label: "Produtos e Catalogo", href: "/vendas/produtos", icon: "📦" },
+      { label: "Painel do modulo", href: "/vendas", icon: "" },
+      { label: "Leads / Prospects", href: "/vendas/leads", icon: "" },
+      { label: "Oportunidades / Funil", href: "/vendas/oportunidades", icon: "" },
+      { label: "Contas e Contatos", href: "/vendas/contas-contatos", icon: "" },
+      { label: "Produtos e Catalogo", href: "/vendas/produtos", icon: "" },
+      { label: "Scanntech", href: "/vendas/scanntech", icon: "" }
     ],
   },
   {
     title: "MARKETING",
-    icon: "📣",
+    icon: "",
     submodules: [
-      { label: "Painel do modulo", href: "/marketing", icon: "🗂️" },
-      { label: "Campanhas", href: "/marketing/campanhas", icon: "🚀" },
-      { label: "Segmentacao", href: "/marketing/segmentacao", icon: "🧩" },
+      { label: "Painel do modulo", href: "/marketing", icon: "" },
+      { label: "Campanhas", href: "/marketing/campanhas", icon: "" },
+      { label: "Segmentacao", href: "/marketing/segmentacao", icon: "" },
     ],
   },
   {
     title: "SOLUCOES",
-    icon: "🧩",
+    icon: "",
     submodules: [
-      { label: "Trade Marketing", href: "/solucoes/trade", icon: "🏪" },
-      { label: "Atendimento", href: "/solucoes/atendimento", icon: "🎧" },
+      { label: "Trade Marketing", href: "/solucoes/trade", icon: "" },
+      { label: "Atendimento", href: "/solucoes/atendimento", icon: "" },
     ],
   },
   {
     title: "AUTOMACAO",
-    icon: "⚙️",
+    icon: "",
     submodules: [
-      { label: "Workflows (Fluxos)", href: "/automacao/workflows", icon: "🔁" },
-      { label: "Gatilhos de Dados", href: "/automacao/gatilhos", icon: "🎯" },
-      { label: "Templates de E-mail", href: "/automacao/templates", icon: "✉️" },
+      { label: "Workflows (Fluxos)", href: "/automacao/workflows", icon: "" },
+      { label: "Gatilhos de Dados", href: "/automacao/gatilhos", icon: "" },
+      { label: "Templates de E-mail", href: "/automacao/templates", icon: "" },
     ],
   },
   {
     title: "AREA DE DADOS",
-    icon: "🧮",
+    icon: "",
     submodules: [
-      { label: "Estudio SQL", href: "/dados/estudio-sql", icon: "💻" },
-      { label: "Relatorios e BI", href: "/area-de-dados/relatorios-bi", icon: "📊" },
-      { label: "Metadados (Objetos)", href: "/area-de-dados/metadados-objetos", icon: "🗃️" },
+      { label: "Estudio SQL", href: "/dados/estudio-sql", icon: "" },
+      { label: "Relatorios e BI", href: "/area-de-dados/relatorios-bi", icon: "" },
+      { label: "Metadados (Objetos)", href: "/area-de-dados/metadados-objetos", icon: "" },
     ],
   },
 ];
@@ -93,6 +94,31 @@ export default function Sidebar() {
   const pathname = usePathname() ?? "/";
   const router = useRouter();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+
+  // Persistir estado de colapso em localStorage
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("nexus_sidebar_collapsed");
+      if (raw) setCollapsed(JSON.parse(raw));
+    } catch {}
+  }, []);
+  useEffect(() => {
+    try {
+      localStorage.setItem("nexus_sidebar_collapsed", JSON.stringify(collapsed));
+    } catch {}
+  }, [collapsed]);
+
+  const canCollapse = (title: string) => [
+    "VENDAS",
+    "MARKETING",
+    "SOLUCOES",
+    "AUTOMACAO",
+    "AREA DE DADOS",
+  ].includes(title.toUpperCase());
+
+  const toggleModule = (title: string) =>
+    setCollapsed((prev) => ({ ...prev, [title]: !prev[title] }));
 
   const handleLogout = async () => {
     if (isLoggingOut) return;
@@ -113,23 +139,30 @@ export default function Sidebar() {
       <div className="sidebar-section navigation">
         {modules.map((module) => {
           const moduleActive = module.submodules.some((sub) => isActive(pathname, sub.href));
+          const isCollapsed = !!collapsed[module.title];
           return (
-            <div key={module.title} className="module-group">
-              <div className={`module-title ${moduleActive ? "is-active" : ""}`}>
+            <div key={module.title} className={`module-group ${isCollapsed ? "is-collapsed" : ""}`}>
+              <button
+                type="button"
+                className={`module-title ${moduleActive ? "is-active" : ""}`}
+                onClick={() => canCollapse(module.title) && toggleModule(module.title)}
+                aria-expanded={!isCollapsed}
+                aria-controls={`group-${module.title}`}
+              >
                 <span aria-hidden="true">{module.icon}</span>
                 <strong>{module.title}</strong>
                 <span className="module-arrow" aria-hidden="true">
-                  {moduleActive ? "v" : ">"}
+                  {isCollapsed ? ">" : "v"}
                 </span>
-              </div>
-              <ul>
+              </button>
+              <ul id={`group-${module.title}`} style={{ display: isCollapsed ? "none" : undefined }}>
                 {module.submodules.map((sub) => {
                   const active = isActive(pathname, sub.href);
                   return (
                     <li key={sub.label}>
                       <Link
                         href={sub.href}
-                        className={active ? "is-active" : ""}
+                        className={`${active ? "is-active" : ""} ${sub.label === "Scanntech" ? "accent-item" : ""}`}
                         aria-current={active ? "page" : undefined}
                       >
                         <span className="submodule-icon" aria-hidden="true">
@@ -158,7 +191,7 @@ export default function Sidebar() {
           <ul>
             {userMenuLinks.map((link) => (
               <li key={link.label}>
-                <Link href={link.href}>
+                <Link href={link.href} className="user-link">
                   <span aria-hidden="true">{link.icon}</span>
                   <span>{link.label}</span>
                 </Link>
@@ -178,3 +211,6 @@ export default function Sidebar() {
     </aside>
   );
 }
+
+
+

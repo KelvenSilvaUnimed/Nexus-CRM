@@ -172,6 +172,12 @@ class TenantMemoryStore:
         record.payload.profiles = profiles
         return record.payload
 
+    def delete_meta_object(self, meta_id: str) -> None:
+        if meta_id not in self.meta_objects:
+            raise KeyError(meta_id)
+        # Em um futuro proximo, poderiamos validar dependencias com widgets/dashboards
+        del self.meta_objects[meta_id]
+
     # Widgets / Dashboards ---------------------------------------------
     def list_dashboards(self) -> List[DashboardSaveRequest]:
         return [dashboard.to_response() for dashboard in self.dashboards.values()]

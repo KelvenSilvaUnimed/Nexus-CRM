@@ -1,5 +1,6 @@
 """Entry-point for the Nexus CRM FastAPI application."""
 from fastapi import Depends, FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import (
     admin,
@@ -24,6 +25,20 @@ def get_application() -> FastAPI:
         docs_url="/docs",
         openapi_url=f"{settings.api_prefix}/openapi.json",
     )
+
+    # CORS: usar lista de dominios em producao; no dev, liberar geral.
+    cors_origins = settings.cors_origins_list
+    if settings.environment.lower() == "development":
+        cors_origins = cors_origins or ["*"]
+
+    if cors_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=cors_origins,
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
 
     app.include_router(health.router, tags=["Health"])  # public
     app.include_router(auth.router, prefix="/auth", tags=["Authentication"])  # public

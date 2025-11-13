@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import List
 
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, Request, status
 from pydantic import BaseModel
 
 from app.core.config import settings
@@ -19,6 +19,7 @@ class TenantContext(BaseModel):
 
 
 async def get_tenant_context(
+    request: Request,
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
     x_user_id: str | None = Header(default=None, alias="X-User-ID"),
     x_user_roles: str | None = Header(default=None, alias="X-User-Roles"),
@@ -30,10 +31,18 @@ async def get_tenant_context(
     frontend can work without a full auth server.
     """
 
-    tenant_id = x_tenant_id or settings.default_tenant_id
-    user_id = x_user_id or settings.default_user_id
-    roles_header = x_user_roles or settings.default_user_roles
-    roles = [role.strip() for role in roles_header.split(",") if role.strip()]
+    # Preferir contexto preenchido pelo JWT (via validar_jwt_e_tenant)
+    jwt_ctx = getattr(request.state, "nexus_context", None)
+
+    if isinstance(jwt_ctx, dict) and jwt_ctx.get("tenant_id") and jwt_ctx.get("user_id"):
+        tenant_id = str(jwt_ctx["tenant_id"])  # normalized
+        user_id = str(jwt_ctx["user_id"])  # normalized
+        roles = [str(r).lower() for r in (jwt_ctx.get("roles") or [])]
+    else:
+        tenant_id = x_tenant_id or settings.default_tenant_id
+        user_id = x_user_id or settings.default_user_id
+        roles_header = x_user_roles or settings.default_user_roles
+        roles = [role.strip() for role in roles_header.split(",") if role.strip()]
 
     if not tenant_id or not user_id:
         raise HTTPException(

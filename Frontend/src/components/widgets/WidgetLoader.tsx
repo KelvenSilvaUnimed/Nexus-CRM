@@ -97,13 +97,13 @@ const WidgetLoader: React.FC<WidgetLoaderProps> = ({
           Nenhum widget publicado para este modulo ainda.
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="dashboard-grid" style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}>
           {widgets.map((widget) => (
-            <article key={widget.id} className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-4">
-              <header className="flex items-center justify-between">
+            <article key={widget.id} className="panel" style={{ padding: 16 }}>
+              <header className="panel-header" style={{ alignItems: "center" }}>
                 <div>
                   <p className="eyebrow">{widget.objectLabel}</p>
-                  <h4 className="text-white text-lg">{widget.title}</h4>
+                  <h4>{widget.title}</h4>
                 </div>
                 <span className="badge">{widget.chartType.toUpperCase()}</span>
               </header>

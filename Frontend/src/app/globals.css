@@ -1,4 +1,5 @@
 :root {
+  /* Light theme palette (padrão) */
   --background: #f8f9fa;
   --card: #ffffff;
   --card-border: #e5e7eb;
@@ -6,9 +7,9 @@
   --text-secondary: #334155;
   --nav-muted: #475569;
   --muted: #64748b;
-  --accent: #10b981;
-  --accent-hover: #0f9c7a;
-  --accent-soft: #f0fdfa;
+  --accent: #10b981; /* emerald-500 */
+  --accent-hover: #0f9c7a; /* custom */
+  --accent-soft: #f0fdfa; /* emerald-50 */
   --success: #10b981;
   --danger: #ef4444;
   --shadow: 0 15px 35px rgba(15, 23, 42, 0.08);
@@ -620,6 +621,11 @@ body {
   letter-spacing: 0.15em;
   text-transform: uppercase;
   color: rgba(248, 250, 252, 0.6);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  padding: 6px 2px;
 }
 
 .module-title.is-active {
@@ -663,6 +669,17 @@ body {
   font-weight: 600;
 }
 
+.module-group.is-collapsed ul {
+  display: none;
+}
+
+/* Destaque para item Scanntech quando nao ativo */
+.module-group a.accent-item:not(.is-active) {
+  background: rgba(13, 148, 136, 0.12);
+  color: var(--text);
+  border: 1px solid rgba(13, 148, 136, 0.25);
+}
+
 .module-group a.is-active::before {
   content: "";
   position: absolute;
@@ -683,6 +700,26 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+/* User profile menu: remove bullets, padronizar links */
+.user-profile-menu ul {
+  list-style: none;
+  padding-left: 0;
+  margin: 8px 0 12px 0;
+}
+.user-profile-menu a.user-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  color: var(--nav-muted);
+  text-decoration: none;
+}
+.user-profile-menu a.user-link:hover {
+  background: var(--surface-soft);
+  color: var(--text);
 }
 
 .support a {
@@ -1399,13 +1436,49 @@ body {
 }
 
 .badge {
-  background: rgba(255, 255, 255, 0.1);
-  color: #f8fafc;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: #f8fafc;
+  color: #0f172a;
+  transition: transform 0.2s ease;
 }
 
 .badge.success {
-  background: var(--success);
-  color: #fff;
+  background: rgba(16, 185, 129, 0.15);
+  color: #059669;
+  border-color: rgba(16, 185, 129, 0.25);
+}
+
+/* Interações sutis / animações */
+.panel {
+  transition: transform 180ms ease, box-shadow 180ms ease;
+  animation: fade-in-up 280ms ease both;
+}
+.panel:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 35px rgba(15, 23, 42, 0.08);
+}
+
+.kpi-card {
+  transition: transform 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+  animation: fade-in-up 260ms ease both;
+}
+.kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.08);
+}
+
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel, .kpi-card, .badge { transition: none; animation: none; }
 }
 
 .primary-button {
@@ -2344,6 +2417,27 @@ body,
 .meta-page {
   background: var(--background);
   color: var(--text);
+}
+
+/* Densidade compacta */
+.density-compact .panel { padding: 0.8rem !important; }
+.density-compact .kpi-grid { gap: 12px !important; }
+.density-compact .kpi-card { padding: 0.8rem !important; }
+.density-compact .sidebar { font-size: 0.95rem; }
+.density-compact .app-main { padding: 20px 24px; }
+
+/* Alto contraste */
+.high-contrast {
+  --card-border: #94a3b8;
+  --accent: #0ea5e9;
+  --accent-hover: #0284c7;
+  --accent-soft: #e0f2fe;
+}
+
+@media (prefers-contrast: more) {
+  :root:not(.high-contrast) {
+    --card-border: #94a3b8;
+  }
 }
 
 .sidebar {

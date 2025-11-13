@@ -138,6 +138,25 @@ async def update_meta_object_permissions(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Meta objeto nao encontrado.") from None
 
 
+@router.delete(
+    "/meta-objetos/{meta_id}",
+    summary="Delete a custom meta-object",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+)
+async def delete_meta_object(
+    meta_id: str,
+    context: TenantContext = Depends(get_tenant_context),
+) -> Response:
+    store = data_store.get_store(context.tenant_id)
+    try:
+        # Remover meta-objeto; caso ainda esteja vinculado a widgets, store pode recusar no futuro
+        store.delete_meta_object(meta_id)
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+    except KeyError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Meta objeto nao encontrado.") from None
+
+
 @router.get(
     "/dashboards",
     summary="List dashboards",

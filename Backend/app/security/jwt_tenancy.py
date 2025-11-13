@@ -98,9 +98,20 @@ async def validar_jwt_e_tenant(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant nao encontrado")
 
     await set_tenant_search_path(session, schema_name)
-    return {
+
+    # Tornar o contexto disponivel para outras dependencias (ex.: get_tenant_context)
+    # sem precisar decodificar o JWT novamente.
+    context_dict = {
         "user_id": user_id,
         "tenant_id": tenant_id,
         "perfil": perfil,
+        "roles": payload.get("roles", []) or ([] if perfil is None else [perfil.lower()]),
         "schema_name": schema_name,
     }
+    try:
+        request.state.nexus_context = context_dict
+    except Exception:
+        # state pode nao estar disponivel em alguns adaptadores, ignorar com seguranca
+        pass
+
+    return context_dict
